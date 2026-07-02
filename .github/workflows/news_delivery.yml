@@ -2,9 +2,9 @@ name: News Delivery
 
 on:
   schedule:
-    - cron: "30 22 * * *"  # JST 07:30
-    - cron: "0 3 * * *"   # JST 12:00
-    - cron: "0 9 * * *"   # JST 18:00
+    - cron: "37 22 * * *"  # JST 07:37
+    - cron: "7 3 * * *"    # JST 12:07
+    - cron: "53 8 * * *"   # JST 17:53
   workflow_dispatch: {}    # 手動実行
 
 jobs:

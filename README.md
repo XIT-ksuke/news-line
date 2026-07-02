@@ -1,6 +1,6 @@
 # 毎日ニュース → LINE配信ボット
 
-GitHub Actions で毎日3回（7:30 / 12:00 / 18:00 JST）最新ニュースを自分のLINEに届けるボット。  
+GitHub Actions で毎日3回（7:37 / 12:07 / 17:53 JST）最新ニュースを自分のLINEに届けるボット。  
 **完全無料枠**で運用できます。
 
 ## アーキテクチャ
@@ -132,9 +132,9 @@ GitHub Secrets（またはワークフローの env）で以下を設定:
 `.github/workflows/news_delivery.yml` の `cron` を編集（UTC基準、JST = UTC+9）:
 
 ```yaml
-- cron: "30 22 * * *"  # JST 07:30 に相当
-- cron: "0 3 * * *"   # JST 12:00 に相当
-- cron: "0 9 * * *"   # JST 18:00 に相当
+- cron: "37 22 * * *"  # JST 07:37 に相当
+- cron: "7 3 * * *"    # JST 12:07 に相当
+- cron: "53 8 * * *"   # JST 17:53 に相当
 ```
 
 > **注意:** GitHub Actions のcronは数分〜十数分の遅延が生じる場合があります（仕様）。
