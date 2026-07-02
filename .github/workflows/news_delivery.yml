@@ -25,11 +25,11 @@ jobs:
 
       - name: Run news bot
         env:
-          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY:              ${{ secrets.GROQ_API_KEY }}
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_ID:              ${{ secrets.LINE_USER_ID }}
           # 以下はオプション（Secrets に登録しなければデフォルト値を使用）
-          # GEMINI_MODEL:  gemini-2.0-flash
+          # GROQ_MODEL:    llama-3.3-70b-versatile
           # TOP_N:         5
           # HOURS_WINDOW:  7
         run: python news_bot.py

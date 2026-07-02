@@ -7,15 +7,15 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import feedparser
-import google.generativeai as genai
 import requests
+from groq import Groq
 
 # ── 設定（環境変数） ──────────────────────────────────────────────
-GEMINI_API_KEY            = os.environ["GEMINI_API_KEY"]
+GROQ_API_KEY              = os.environ["GROQ_API_KEY"]
 LINE_CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 LINE_USER_ID              = os.environ["LINE_USER_ID"]
 
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+GROQ_MODEL   = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 TOP_N        = int(os.environ.get("TOP_N", "5"))
 HOURS_WINDOW = int(os.environ.get("HOURS_WINDOW", "7"))
 
@@ -84,11 +84,10 @@ def fetch_articles(feeds: list[str], hours_window: int) -> list[dict]:
     return articles
 
 
-# ── Gemini による選定・要約 ───────────────────────────────────────
-def select_with_gemini(articles: list[dict], top_n: int, model_name: str) -> list[dict]:
-    """Gemini に記事を渡し、重要 top_n 件を JSON で受け取る。"""
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel(model_name)
+# ── Groq による選定・要約 ─────────────────────────────────────────
+def select_with_groq(articles: list[dict], top_n: int, model_name: str) -> list[dict]:
+    """Groq に記事を渡し、重要 top_n 件を JSON で受け取る。"""
+    client = Groq(api_key=GROQ_API_KEY)
 
     numbered = "\n".join(f"{i+1}. {a['title']}" for i, a in enumerate(articles))
 
@@ -98,11 +97,17 @@ def select_with_gemini(articles: list[dict], top_n: int, model_name: str) -> lis
 記事一覧:
 {numbered}
 
-出力形式（```などのマークダウンは不要。JSONのみ）:
-{{"selected":[{{"rank":1,"title":"元のタイトルそのまま","summary":"1〜2文の日本語要約"}}]}}"""
+出力形式（```などのマークダウンは不要。JSONのみ）。
+id は上の記事一覧の先頭に付いた番号をそのまま指定すること:
+{{"selected":[{{"id":1,"summary":"1〜2文の日本語要約"}}]}}"""
 
-    response = model.generate_content(prompt)
-    raw = response.text.strip()
+    response = client.chat.completions.create(
+        model=model_name,
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
+        temperature=0.3,
+    )
+    raw = (response.choices[0].message.content or "").strip()
 
     # モデルが ``` ブロックで返してきた場合の除去
     if raw.startswith("```"):
@@ -111,17 +116,21 @@ def select_with_gemini(articles: list[dict], top_n: int, model_name: str) -> lis
         raw = "\n".join(inner)
 
     data = json.loads(raw)
-    gemini_items: list[dict] = data.get("selected", [])
+    selected_items: list[dict] = data.get("selected", [])
 
-    # Gemini が返したタイトルに対して元記事の URL を紐付け
-    url_by_title = {a["title"]: a["url"] for a in articles}
+    # LLM が返した記事番号(id)で元記事のタイトル・URL を紐付け（全件に引用を付与）
     result: list[dict] = []
-    for item in gemini_items:
-        title = item.get("title", "")
+    seen_ids: set[int] = set()
+    for item in selected_items:
+        idx = item.get("id")
+        if not isinstance(idx, int) or not (1 <= idx <= len(articles)) or idx in seen_ids:
+            continue
+        seen_ids.add(idx)
+        src = articles[idx - 1]
         result.append({
-            "title":   title,
+            "title":   src["title"],
             "summary": item.get("summary", ""),
-            "url":     url_by_title.get(title, ""),
+            "url":     src["url"],
         })
 
     return result
@@ -174,8 +183,8 @@ def main() -> None:
         log.info("配信対象なし → 終了")
         return
 
-    selected = select_with_gemini(articles, TOP_N, GEMINI_MODEL)
-    log.info("Gemini 選定: %d 件", len(selected))
+    selected = select_with_groq(articles, TOP_N, GROQ_MODEL)
+    log.info("Groq 選定: %d 件", len(selected))
 
     if not selected:
         log.info("選定結果なし → 終了")
