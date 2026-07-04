@@ -1,11 +1,11 @@
 name: News Delivery
 
 on:
-  schedule:
-    - cron: "37 22 * * *"  # JST 07:37
-    - cron: "7 3 * * *"    # JST 12:07
-    - cron: "53 8 * * *"   # JST 17:53
-  workflow_dispatch: {}    # 手動実行
+  # 起動は外部スケジューラ（cron-job.org）から workflow_dispatch API で行う。
+  # GitHub の schedule(cron) は無料publicリポで時刻保証がなく大幅遅延・スキップ
+  # するため使用しない（詳細: docs/NG-docs/NG理由.txt）。
+  # 配信時刻(JST): 07:37 / 12:07 / 17:53 ← cron-job.org 側で設定する。
+  workflow_dispatch: {}    # 手動実行 / 外部スケジューラからの起動
 
 jobs:
   deliver:
