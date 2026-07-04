@@ -1,14 +1,28 @@
 #!/usr/bin/env python3
 """毎日ニュース → LINE配信ボット（GitHub Actions で実行）"""
 
+import html
 import json
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 import feedparser
 import requests
 from groq import Groq
+
+# HTMLタグ除去用
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _clean_text(raw: str, limit: int = 120) -> str:
+    """HTMLタグ・実体参照を除去し、空白を畳んで limit 文字に切り詰める。"""
+    text = html.unescape(_TAG_RE.sub(" ", raw or ""))
+    text = " ".join(text.split())
+    if len(text) > limit:
+        text = text[:limit].rstrip() + "…"
+    return text
 
 # ── 設定（環境変数） ──────────────────────────────────────────────
 GROQ_API_KEY              = os.environ["GROQ_API_KEY"]
@@ -72,8 +86,9 @@ def fetch_articles(feeds: list[str], hours_window: int) -> list[dict]:
                     if pub_dt < cutoff:
                         continue
 
+                desc = entry.get("summary") or entry.get("description") or ""
                 seen_titles.add(title)
-                articles.append({"title": title, "url": link})
+                articles.append({"title": title, "url": link, "desc": _clean_text(desc)})
                 added += 1
 
             log.info("OK   %s → %d件追加", url, added)
@@ -89,17 +104,27 @@ def select_with_groq(articles: list[dict], top_n: int, model_name: str) -> list[
     """Groq に記事を渡し、重要 top_n 件を JSON で受け取る。"""
     client = Groq(api_key=GROQ_API_KEY)
 
-    numbered = "\n".join(f"{i+1}. {a['title']}" for i, a in enumerate(articles))
+    lines = []
+    for i, a in enumerate(articles):
+        d = a.get("desc", "")
+        lines.append(f"{i+1}. {a['title']}" + (f"\n   概要: {d}" if d else ""))
+    numbered = "\n".join(lines)
 
     prompt = f"""以下のニュース記事から重要度の高いものを{top_n}件選び、JSONのみ返してください。
 選定基準: 社会的影響・技術革新・ビジネスインパクト・速報性。
+各記事は「番号. タイトル」と、その下に「概要」が付く場合があります。
 
 記事一覧:
 {numbered}
 
+要約のルール:
+- 概要の内容に基づき、日本語で簡潔にまとめる（1文、最大2文）。
+- タイトルの言い換えや同じ内容の繰り返しは避け、背景・理由・影響など新しい情報を加える。
+- 概要が無い/情報が乏しい場合は、無理に水増しせず短くする。
+
 出力形式（```などのマークダウンは不要。JSONのみ）。
 id は上の記事一覧の先頭に付いた番号をそのまま指定すること:
-{{"selected":[{{"id":1,"summary":"1〜2文の日本語要約"}}]}}"""
+{{"selected":[{{"id":1,"summary":"要約"}}]}}"""
 
     response = client.chat.completions.create(
         model=model_name,
